@@ -1,0 +1,15 @@
+# OS / éditeur
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Environnement local
+.env
+.env.*
+
+# Logs / cache
+*.log
+vendor/
+node_modules/

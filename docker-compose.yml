@@ -1,0 +1,8 @@
+services:
+  web:
+    build: .
+    container_name: lfi-secure-lab
+    ports:
+      # Hôte:conteneur — accessible depuis Kali via IP_HOTE:8080
+      - "8080:80"
+    restart: unless-stopped
