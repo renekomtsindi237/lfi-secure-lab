@@ -301,6 +301,9 @@ $badgeClass = $isSecure ? 'high' : $level;
         </ul>
     </div>
 
+    <a class="button source-button"
+       href="source.php?module=upload&amp;level=<?= e($level) ?>">Voir le code source</a>
+
 </div>
 </body>
 </html>

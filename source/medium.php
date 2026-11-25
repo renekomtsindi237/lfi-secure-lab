@@ -1,24 +1,28 @@
 <?php
 /**
- * MEDIUM — filtrages simples (insuffisants)
- * On retire quelques motifs connus, mais le contrôle reste contournable.
+ * MEDIUM — validation du nom + filtrage naïf par liste noire.
+ *
+ * Le nom est d’abord validé (règles imposées), puis quelques motifs connus sont
+ * retirés (« ../ », « http:// », « https:// », « ftp:// »). La liste noire reste
+ * une mauvaise pratique : ici elle est de surcroît redondante avec la validation.
+ *
+ * Variables attendues (définies par index.php) :
+ *   $pageInput, $includesDir, verifierNomFichier(), resolveLabTarget().
  */
 
-$file = $pageInput ?? ($_GET['page'] ?? 'accueil.php');
+$erreurFormat = verifierNomFichier($pageInput);
 
-// Filtrage naïf (style DVWA Medium) — insuffisant contre LFI/RFI
-$file = str_replace(['../', '..\\'], '', $file);
-$file = str_replace(['http://', 'https://', 'ftp://'], '', $file);
+if ($erreurFormat !== null) {
+    $message = $erreurFormat;
+    $status  = 'error';
 
-$message = '';
-
-if ($file === '' || $file === null) {
-    $message = 'Erreur : aucun nom de fichier fourni.';
-    $file = null;
-} else {
-    $candidate = __DIR__ . '/../includes/' . $file;
-    if (is_file($candidate)) {
-        $file = $candidate;
-    }
-    // Sinon on laisse $file tel quel → encore dangereux
+    return;
 }
+
+// Filtrage naïf (style DVWA Medium) — insuffisant contre LFI/RFI.
+$filtered = str_replace(['../', '..\\'], '', $pageInput);
+$filtered = str_replace(['http://', 'https://', 'ftp://'], '', $filtered);
+
+$file    = resolveLabTarget($filtered, $includesDir);
+$status  = 'ok';
+$message = 'Cas succès (Medium) : « ' . $pageInput . ' » validé puis filtré par liste noire et inclus.';

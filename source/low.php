@@ -1,16 +1,27 @@
 <?php
 /**
- * LOW — volontairement vulnérable (comme DVWA Low)
- * Aucune validation : le paramètre page est inclus tel quel.
- * → LFI et RFI possibles si allow_url_include est activé.
+ * LOW — validation du nom (critères imposés) mais AUCUNE liste blanche.
+ *
+ * Le nom est contrôlé (alphabétique, sans caractères spéciaux, extension .php,
+ * ≤ 20 caractères) : chaîne vide, nom trop long, caractères spéciaux ou
+ * mauvaise extension sont donc refusés, même à ce niveau.
+ * Il n’y a toutefois pas de liste blanche : tout nom valide pointant vers un
+ * fichier .php existant est inclus.
+ *
+ * Variables attendues (définies par index.php) :
+ *   $pageInput, $includesDir                     (entrée + dossier includes)
+ *   verifierNomFichier(), resolveLabTarget()     (helpers communs)
  */
 
-$file = $pageInput ?? ($_GET['page'] ?? 'accueil.php');
+$erreurFormat = verifierNomFichier($pageInput);
 
-// Préfixe local pour les pages du lab (mais rien n’empêche ../ ou http://)
-if ($file !== '' && strpos($file, 'http://') !== 0 && strpos($file, 'https://') !== 0 && strpos($file, '/') !== 0) {
-    $candidate = __DIR__ . '/../includes/' . $file;
-    if (is_file($candidate)) {
-        $file = $candidate;
-    }
+if ($erreurFormat !== null) {
+    $message = $erreurFormat;
+    $status  = 'error';
+
+    return;
 }
+
+$file    = resolveLabTarget($pageInput, $includesDir);
+$status  = 'ok';
+$message = 'Cas succès (Low) : le fichier « ' . $pageInput . ' » a été inclus (sans liste blanche).';

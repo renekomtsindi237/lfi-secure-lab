@@ -37,21 +37,21 @@ $acceptedFiles = [
 $levels = [
     'low' => [
         'label' => 'Low',
-        'title' => 'Aucune validation',
-        'desc'  => 'Le paramètre « page » est inclus tel quel, sans aucun contrôle.',
-        'flaw'  => 'Inclusion locale (« /etc/passwd », « ../config/… ») et distante (http://…) possibles → lecture de fichiers / exécution.',
+        'title' => 'Validation du nom seule (sans liste blanche)',
+        'desc'  => 'Le nom est validé (alphabétique, sans caractères spéciaux, extension .php, ≤ 20 caractères) puis inclus sans aucune liste blanche.',
+        'flaw'  => 'Absence de liste blanche : tout nom valide correspondant à un fichier .php existant peut être inclus.',
     ],
     'medium' => [
         'label' => 'Medium',
-        'title' => 'Filtrage naïf (liste noire)',
-        'desc'  => 'Quelques motifs sont retirés (« ../ », « http:// », « https:// », « ftp:// »), mais le contrôle reste insuffisant.',
-        'flaw'  => 'Contournable (double écriture « ….// », encodage, chemin absolu) : une liste noire n’est jamais fiable.',
+        'title' => 'Validation + filtrage naïf (liste noire)',
+        'desc'  => 'Le nom est validé, puis des motifs connus (« ../ », « http:// », « https:// », « ftp:// ») sont retirés avant inclusion.',
+        'flaw'  => 'La liste noire reste une mauvaise pratique (ici de surcroît redondante avec la validation du nom).',
     ],
     'high' => [
         'label' => 'High',
         'title' => 'Validation du nom (règles imposées)',
-        'desc'  => 'Le nom est contrôlé : alphabétique, sans caractères spéciaux, extension .php et ≤ 20 caractères. Message dédié par cas.',
-        'flaw'  => 'Pas de liste blanche : un fichier .php alphabétique présent sur le serveur reste inclusible.',
+        'desc'  => 'Le nom est validé : alphabétique, sans caractères spéciaux, extension .php et ≤ 20 caractères. Message dédié par cas.',
+        'flaw'  => 'Toujours pas de liste blanche : un nom valide correspondant à un fichier présent est inclus.',
     ],
     'secure' => [
         'label' => 'Secure',
@@ -161,81 +161,9 @@ $status    = ''; // ok | error
 $file      = null;
 
 if ($submitted) {
-    if ($level === 'low') {
-        // Aucune validation : inclusion directe (faille volontaire).
-        if ($pageInput === '') {
-            $message = 'Cas vide : veuillez saisir un nom de fichier.';
-            $status  = 'error';
-        } else {
-            $file    = resolveLabTarget($pageInput, $includesDir);
-            $status  = 'ok';
-            $message = 'Cas succès (Low) : « ' . $pageInput . ' » a été inclus sans aucune validation.';
-        }
-    } elseif ($level === 'medium') {
-        // Filtrage naïf par liste noire : insuffisant (faille volontaire).
-        if ($pageInput === '') {
-            $message = 'Erreur (Medium) : aucun nom de fichier fourni.';
-            $status  = 'error';
-        } else {
-            $filtered = str_replace(['../', '..\\'], '', $pageInput);
-            $filtered = str_replace(['http://', 'https://', 'ftp://'], '', $filtered);
-            $file     = resolveLabTarget($filtered, $includesDir);
-            $status   = 'ok';
-            $message  = 'Cas succès (Medium) : « ' . $pageInput . ' » filtré par liste noire puis inclus.';
-        }
-    } elseif ($level === 'high') {
-        // Validation du nom (règles imposées) mais pas encore de liste blanche.
-        $erreurFormat = verifierNomFichier($pageInput);
-
-        if ($erreurFormat !== null) {
-            $message = $erreurFormat;
-            $status  = 'error';
-        } else {
-            $candidate = ($includesDir !== false)
-                ? $includesDir . DIRECTORY_SEPARATOR . $pageInput
-                : null;
-
-            if ($candidate === null || !is_file($candidate)) {
-                $message = 'Cas accès : fichier introuvable parmi les pages du module.';
-                $status  = 'error';
-            } else {
-                $file    = $candidate;
-                $status  = 'ok';
-                $message = 'Cas succès (High) : le fichier « ' . $pageInput . ' » a été inclus'
-                    . ' (liste blanche encore absente).';
-            }
-        }
-    } else {
-        // SECURE — correction complète : validation + liste blanche + realpath.
-        $erreurFormat = verifierNomFichier($pageInput);
-
-        if ($erreurFormat !== null) {
-            $message = $erreurFormat;
-            $status  = 'error';
-        } elseif (!in_array($pageInput, array_keys($acceptedFiles), true)) {
-            $message = 'Cas liste blanche : ce fichier n’est pas autorisé.'
-                . ' Choisissez un fichier du tableau ci-dessous.';
-            $status = 'error';
-        } else {
-            $candidate = $includesDir . DIRECTORY_SEPARATOR . $pageInput;
-            $real      = ($includesDir !== false) ? realpath($candidate) : false;
-
-            // Le fichier doit exister et rester dans includes/ (anti-LFI)
-            if (
-                $real === false
-                || !is_file($real)
-                || strpos($real, $includesDir . DIRECTORY_SEPARATOR) !== 0
-            ) {
-                $message = 'Cas accès : fichier introuvable ou chemin non autorisé.';
-                $status  = 'error';
-            } else {
-                $file    = $real;
-                $status  = 'ok';
-                $message = 'Cas succès : le fichier « ' . $pageInput . ' » est valide'
-                    . ' et a été inclus en toute sécurité.';
-            }
-        }
-    }
+    // La logique de chaque niveau vit dans source/{niveau}.php : c’est aussi le
+    // fichier affiché par le bouton « Voir le code source » (façon DVWA).
+    require dirname(__DIR__) . '/source/' . $level . '.php';
 }
 
 $badgeClass = $isSecure ? 'high' : $level;
@@ -280,9 +208,8 @@ $badgeClass = $isSecure ? 'high' : $level;
                    placeholder="ex. accueil.php" required>
             <button type="submit" name="go" value="1">Valider</button>
         </form>
-        <?php if ($isSecure): ?>
-            <p class="help">Règles : alphabétique, sans caractères spéciaux, extension <code>.php</code>, ≤ 20 caractères.</p>
-        <?php endif; ?>
+        <p class="help">Règles appliquées à tous les niveaux : alphabétique, sans caractères spéciaux,
+            extension <code>.php</code>, ≤ 20 caractères.</p>
     </div>
 
     <div class="card">
@@ -340,7 +267,7 @@ $badgeClass = $isSecure ? 'high' : $level;
     <?php endif; ?>
 
     <div class="card muted">
-        <strong>Rappel des cas de message (niveaux High &amp; Secure) :</strong>
+        <strong>Rappel des cas de message (tous les niveaux) :</strong>
         <ul>
             <li>vide</li>
             <li>longueur &gt; 20</li>
@@ -350,6 +277,9 @@ $badgeClass = $isSecure ? 'high' : $level;
             <li>succès</li>
         </ul>
     </div>
+
+    <a class="button source-button"
+       href="source.php?module=inclusion&amp;level=<?= e($level) ?>">Voir le code source</a>
 
 </div>
 </body>

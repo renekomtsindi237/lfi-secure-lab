@@ -1,73 +1,36 @@
 <?php
 /**
- * HIGH — contrôles sur le nom (longueur, extension, chiffres, caractères spéciaux)
- * Messages personnalisés selon le cas.
- * Attention : ce n’est PAS encore une correction complète (pas de liste blanche stricte).
+ * HIGH — validation du nom (règles imposées), sans liste blanche.
+ *
+ * Le nom doit être alphabétique, sans caractères spéciaux, en .php et ≤ 20
+ * caractères, puis correspondre à un fichier présent dans includes/.
+ * Il n’y a toujours PAS de liste blanche : tout nom valide pointant vers un
+ * fichier existant du dossier est inclus.
+ *
+ * Variables attendues (définies par index.php) :
+ *   $pageInput, $includesDir, verifierNomFichier().
  */
 
-$file = $pageInput ?? ($_GET['page'] ?? '');
-$message = '';
+$erreurFormat = verifierNomFichier($pageInput);
 
-/**
- * Valide le nom demandé et renvoie un message d’erreur personnalisé, ou null si OK.
- */
-function validatePageNameHigh(string $name): ?string
-{
-    if ($name === '') {
-        return 'Erreur : veuillez indiquer un nom de fichier.';
-    }
+if ($erreurFormat !== null) {
+    $message = $erreurFormat;
+    $status  = 'error';
 
-    // Longueur maximale 20 caractères (nom + extension)
-    if (strlen($name) > 20) {
-        return 'Erreur : le nom ne doit pas dépasser 20 caractères (actuel : ' . strlen($name) . ').';
-    }
-
-    // Caractères spéciaux / traversal / schémas distants
-    if (preg_match('/[\\\\\/:*?"<>|\0]/', $name)) {
-        return 'Erreur : caractères spéciaux interdits dans le nom (ex. / \\ : * ? " < > |).';
-    }
-    if (strpos($name, '..') !== false) {
-        return 'Erreur : la séquence ".." est interdite (tentative de sortir du dossier).';
-    }
-    if (preg_match('#^(https?|ftp|php|data|file):#i', $name)) {
-        return 'Erreur : les préfixes distants ou dangereux (http, https, ftp, php, data, file) sont refusés.';
-    }
-
-    // Extension obligatoire .php
-    if (!preg_match('/\.php$/i', $name)) {
-        return 'Erreur : seule l’extension .php est acceptée.';
-    }
-
-    $base = substr($name, 0, -4); // retire ".php"
-
-    if ($base === '') {
-        return 'Erreur : le nom avant l’extension .php est vide.';
-    }
-
-    // Pas de chiffres dans le nom de base (règle pédagogique High)
-    if (preg_match('/[0-9]/', $base)) {
-        return 'Erreur : les chiffres sont interdits dans le nom du fichier (exemple refusé : file1.php).';
-    }
-
-    // Uniquement lettres, tiret et underscore dans le nom de base
-    if (!preg_match('/^[A-Za-z_-]+$/', $base)) {
-        return 'Erreur : le nom ne peut contenir que des lettres, tirets ou underscores (avant .php).';
-    }
-
-    return null; // OK
+    return;
 }
 
-$error = validatePageNameHigh($file);
+$candidate = ($includesDir !== false)
+    ? $includesDir . DIRECTORY_SEPARATOR . $pageInput
+    : null;
 
-if ($error !== null) {
-    $message = $error;
-    $file = null;
-} else {
-    $candidate = __DIR__ . '/../includes/' . $file;
-    if (!is_file($candidate)) {
-        $message = 'Erreur : fichier introuvable parmi les pages du module.';
-        $file = null;
-    } else {
-        $file = $candidate;
-    }
+if ($candidate === null || !is_file($candidate)) {
+    $message = 'Cas accès : fichier introuvable parmi les pages du module.';
+    $status  = 'error';
+
+    return;
 }
+
+$file    = $candidate;
+$status  = 'ok';
+$message = 'Cas succès (High) : le fichier « ' . $pageInput . ' » a été inclus (liste blanche encore absente).';

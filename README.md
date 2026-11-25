@@ -9,14 +9,15 @@ Applications PHP pédagogiques (style DVWA) couvrant deux modules :
 
 | Élément | Rôle |
 |--------|------|
-| `public/index.php` | Module inclusion : `?level=low\|medium\|high\|secure` (Secure = validation + liste blanche) |
+| `public/index.php` | Module inclusion : `?level=low\|medium\|high\|secure` (validation du nom à tous les niveaux, liste blanche en Secure) |
 | `public/upload.php` | Module téléversement : `?level=low\|medium\|high\|secure` |
 | `public/download.php` | Téléchargement sûr des fichiers du niveau Secure |
+| `public/source.php` | « Voir le code source » du module/niveau courant (façon DVWA) |
 | `public/assets/style.css` | Feuille de style de l'atelier téléversement |
 | `lib/bootstrap.php` | Session, CSRF, en-têtes de sécurité, helpers de niveau |
 | `lib/SecureUploadManager.php` | Stockage privé + validation serveur (niveau Secure) |
 | `includes/` | Fichiers inclus par le module LFI (`accueil.php`, `info.php`, `aide.php`) |
-| `source/` | Variantes Low / Medium / High / Secure du module LFI (comparaison TP) |
+| `source/` | Logique par niveau du module LFI (`low.php`, `medium.php`, `high.php`, `secure.php`), exécutée **et** affichée par « Voir le code source » |
 | `config/` | Configuration Apache + PHP durcies |
 | `Dockerfile` / `docker-compose.yml` | Déploiement conteneurisé |
 
@@ -64,19 +65,26 @@ php -S 0.0.0.0:8080 -t public
 
 Niveau choisi via `index.php/?level=…` (Low/Medium/High = vulnérables, Secure = corrigé, **niveau par défaut**).
 
+**La validation du nom s’applique à tous les niveaux** : chaîne vide, longueur > 20,
+caractères spéciaux / non alphabétiques et mauvaise extension sont **refusés partout**.
+Seule la **liste blanche** distingue le niveau Secure des autres.
+
 | Niveau | Contrôles | Faille / contournement |
 |--------|-----------|------------------------|
-| **Low** | Aucun | `page=/etc/passwd`, `page=../config/php-security.ini`, `page=http://…/shell.php` (LFI/RFI) |
-| **Medium** | Liste noire naïve (`../`, `http://`, `https://`, `ftp://`) | Contournable (double écriture, encodage, chemin absolu) |
-| **High** | Validation du nom (règles imposées) + messages par cas | Pas de liste blanche : tout `.php` alphabétique présent est inclus |
+| **Low** | Validation du nom (règles imposées) — **pas** de liste blanche | Absence de liste blanche : tout `.php` alphabétique existant est inclus |
+| **Medium** | Validation du nom + liste noire naïve (`../`, `http://`, `https://`, `ftp://`) | Liste noire = mauvaise pratique (de surcroît redondante ici) |
+| **High** | Validation du nom + messages par cas | Pas de liste blanche : tout `.php` alphabétique présent est inclus |
 | **Secure** | Validation + **liste blanche** + `realpath` confiné à `includes/` | Aucune faille connue |
 
-### Règles de validation (niveaux High & Secure)
+Chaque niveau propose un bouton **« Voir le code source »** (façon DVWA) :
+`public/source.php?module=inclusion&level=…` affiche le code réellement exécuté.
+
+### Règles de validation (tous les niveaux)
 
 - Nom **alphabétique** + extension `.php`
 - **Pas** de caractères spéciaux
 - **≤ 20** caractères au total (avec `.php`)
-- Message dédié pour chaque cas d’erreur
+- Message dédié pour chaque cas d’erreur (vide, longueur, caractères spéciaux, extension)
 - (Secure) Inclusion uniquement des fichiers de la **liste blanche** (anti-LFI)
 
 ## Module téléversement (niveaux)

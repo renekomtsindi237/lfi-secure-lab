@@ -8,158 +8,89 @@ Une ligne = un test → puis **Valider**.
 > (`ip a` est refusé — c’est normal).
 
 L’application propose **4 niveaux** (onglets en haut de page, `?level=low|medium|high|secure`).
-Le **niveau par défaut est Secure**. La même saisie ne se comporte donc pas de
-la même façon selon le niveau : les résultats attendus sont donnés **par niveau**.
+Le **niveau par défaut est Secure**.
 
-Fichiers réellement présents dans `includes/` : `accueil.php`, `info.php`, `aide.php`
-(ce sont aussi les fichiers de la liste blanche du niveau Secure).
+**Les règles de validation sont appliquées à TOUS les niveaux** (c’est le critère
+imposé) : chaîne vide, nom trop long, caractères spéciaux / non alphabétiques et
+mauvaise extension sont refusés **de la même façon en Low, Medium, High et Secure**,
+avec un **message personnalisé** pour chaque cas. Ce qui distingue les niveaux,
+c’est la **liste blanche** : seul le niveau Secure l’applique.
+
+Chaque page dispose d’un bouton **« Voir le code source »** (façon DVWA) qui
+affiche le code PHP réellement exécuté pour le niveau courant.
+
+Fichiers réellement présents dans `includes/` : `accueil.php`, `info.php`, `aide.php`.
 
 ---
 
-## Niveau Secure (par défaut) — comportement de référence
-
-### Succès attendu
-
-```
-accueil.php
-info.php
-aide.php
-```
-→ *Cas succès* : le fichier est validé **et** présent dans la liste blanche, son contenu est affiché.
-
-### Échec attendu — hors liste blanche (anti-LFI)
-
-```
-secret.php
-admin.php
-```
-→ *Cas liste blanche* (le format est bon, mais le fichier n’est pas autorisé).
-
-### Échec attendu — LFI / chemins
-
-```
-../../etc/passwd
-../../../../etc/passwd
-/etc/passwd
-....//....//etc/passwd
-```
-→ *Cas caractères spéciaux* (par exemple le `/`).
-
-### Échec attendu — RFI / wrappers
-
-```
-http://exemple.com/shell.php
-https://exemple.com/x.php
-php://filter/resource=accueil.php
-file:///etc/passwd
-```
-→ *Cas caractères spéciaux*.
-
-### Échec attendu — validation du devoir (messages spécialisés)
-
-```
-accueil.txt
-test.jpg
-file1.php
-abcdefghijklmnopqrstuvwxyz.php
-accueil..php
-ip a
-```
+## 1. Saisies refusées — identiques à TOUS les niveaux
 
 | Saisie | Cas de message attendu |
 |--------|-------------------------|
-| `accueil.txt` | Cas extension |
-| `test.jpg` | Cas extension |
-| `file1.php` | Cas caractères spéciaux (chiffre) |
-| `abcdefghijklmnopqrstuvwxyz.php` | Cas longueur (> 20) |
-| `accueil..php` | Cas alphabétique |
-| `ip a` | Cas caractères spéciaux (espace) |
-
-### Échec attendu — champ vide
-
-*(ne rien écrire, cliquer Valider)* → *Cas vide*.
+| *(ne rien écrire, cliquer Valider)* | **Cas vide** |
+| `abcdefghijklmnopqrstuvwxyz.php` | **Cas longueur** (> 20) |
+| `ip a` | **Cas caractères spéciaux** (espace) |
+| `/etc/passwd` | **Cas caractères spéciaux** (barre oblique) |
+| `../../etc/passwd` | **Cas caractères spéciaux** |
+| `....//....//etc/passwd` | **Cas caractères spéciaux** |
+| `http://exemple.com/shell.php` | **Cas caractères spéciaux** |
+| `php://filter/resource=accueil.php` | **Cas caractères spéciaux** |
+| `file:///etc/passwd` | **Cas caractères spéciaux** |
+| `file1.php` | **Cas caractères spéciaux** (chiffre interdit) |
+| `accueil.txt` | **Cas extension** |
+| `test.jpg` | **Cas extension** |
+| `accueil..php` | **Cas alphabétique** |
 
 ---
 
-## Niveau High — validation du nom, **sans** liste blanche
-
-Contrôles identiques à Secure (alphabétique, sans caractères spéciaux,
-`.php`, ≤ 20 caractères) **mais** un fichier `.php` alphabétique présent sur le
-serveur est inclus même s’il n’est pas dans la liste blanche.
-
-### Succès attendu
+## 2. Saisies acceptées — identiques à TOUS les niveaux
 
 ```
 accueil.php
 info.php
 aide.php
 ```
-→ *Cas succès (High)* + contenu affiché.
+→ *Cas succès* : le nom est valide, le contenu du fichier est affiché.
 
-### Échec attendu
+---
+
+## 3. Différence entre les niveaux — uniquement la liste blanche
+
+### Niveau Secure (par défaut)
+
+Un nom **au bon format** mais **absent de la liste blanche** est refusé :
 
 ```
 secret.php
 admin.php
 ```
-→ *Cas accès* : fichier introuvable parmi les pages du module.
+→ *Cas liste blanche* : ce fichier n’est pas autorisé.
 
-Le reste des saisies (LFI, RFI, extension, longueur, vide) donne **les mêmes
-messages** qu’au niveau Secure.
+### Niveaux Low / Medium / High
 
----
-
-## Niveau Medium — filtrage naïf (liste noire)
-
-Les motifs `../`, `..\`, `http://`, `https://`, `ftp://` sont **retirés** de la
-saisie, puis le fichier est inclus. Ce contrôle est **insuffisant** : le message
-affiche toujours « Cas succès (Medium) » (sauf champ vide).
-
-### À tester
-
-```
-accueil.php
-/etc/passwd
-....//config/php-security.ini
-../../etc/passwd
-http://exemple.com/shell.php
-```
-
-| Saisie | Effet observé |
-|--------|----------------|
-| `accueil.php` | inclus normalement (contenu affiché) |
-| `/etc/passwd` | chemin absolu **non filtré** → lecture du fichier (LFI) |
-| `....//config/php-security.ini` | le double `..//` survit au filtre → **contournement** (traversal) |
-| `../../etc/passwd` | motifs `../` retirés → inclusion échoue (aucun contenu) |
-| `http://exemple.com/shell.php` | schéma `http://` retiré → inclusion échoue |
-
-### Champ vide
-
-*(ne rien écrire, cliquer Valider)* → *Erreur (Medium)*.
+Pas de liste blanche : un nom au bon format pointant vers un fichier `.php`
+**existant** est inclus. Le niveau Secure est le seul à restreindre à
+`accueil.php`, `info.php` et `aide.php`.
 
 ---
 
-## Niveau Low — aucune validation
+## 4. Voir le code source
 
-Le paramètre `page` est inclus **tel quel** : LFI et RFI possibles.
-
-### À tester
+Le bouton **« Voir le code source »** (dans la carte du niveau) ouvre :
 
 ```
-accueil.php
-/etc/passwd
-../config/php-security.ini
-http://exemple.com/shell.php
+source.php?module=inclusion&level=low
+source.php?module=inclusion&level=medium
+source.php?module=inclusion&level=high
+source.php?module=inclusion&level=secure
 ```
-→ *Cas succès (Low)* avec lecture de fichiers arbitraires / inclusion distante.
 
-### Champ vide
-
-*(ne rien écrire, cliquer Valider)* → *Cas vide*.
+→ affiche le code du fichier `source/<niveau>.php` en couleurs.
+Pour le module de téléversement : `source.php?module=upload`.
 
 ---
 
-## Module téléversement (autre page)
+## 5. Module téléversement (autre page)
 
 Page dédiée : `http://127.0.0.1:8080/upload.php` (champ **fichier**, `?level=low|medium|high|secure`).
 Le contenu est affiché **brut** (Low/Medium/High) ou de façon **sûre** (Secure).
