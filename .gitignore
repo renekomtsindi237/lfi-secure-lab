@@ -13,3 +13,7 @@ Thumbs.db
 *.log
 vendor/
 node_modules/
+
+# Fichiers générés à l'exécution (téléversements)
+/storage/
+/public/uploads/
